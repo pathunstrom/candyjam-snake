@@ -3,51 +3,42 @@ __author__ = 'Patrick'
 import pygame
 import sys
 from pygame.locals import *
-from random import randint, choice
-
+from random import randint
 
 interval = 150
 square_size = 16
-square_tuple = (square_size, square_size)
 spaces = 30
+fps = []
 images = ["images/redsquare.png", "images/redcirlce.png",
           "images/bluesquare.png", "images/bluecircle.png",
           "images/greensquare.png", "images/greencircle.png",
           "images/yellowsquare.png", "images/yellowcircle.png"]
 
-
 class Segment(pygame.sprite.Sprite):
     """Parent class for Head and Body"""
     def __init__(self):
         super(Segment, self).__init__()
-        self.rect = pygame.Rect((0, 0), square_tuple)
+        self.rect = pygame.Rect(0, 0, square_size, square_size)
         self.old_x = -1
         self.old_y = 0
         self.color = (0, 0, 0)
-
-    def draw(self):
-        pygame.draw.rect(display, self.color, self.rect)
-
-    def move(self):
-        pass
-
-    def update(self):
-        self.move()
 
 
 class Head(Segment):
     """The snake's head. Collision detection!"""
     def __init__(self):
         super(Head, self).__init__()
-        self.image = pygame.Surface(square_tuple)
-        self.image.fill(000)
-        self.image.set_colorkey(000)
+        global square_size
+        self.image = pygame.Surface((square_size, square_size))
+        self.image.fill(0)
+        self.image.set_colorkey(0)
+        pygame.draw.circle(self.image, (0, 255, 0), (16/2, 16/2), 16 / 2)
         self.x, self.y = 0, 0
         self.vector_x = 1
         self.vector_y = 0
         self.color = (0, 255, 0)
 
-    def move(self):
+    def update(self):
         self.old_x, self.old_y = self.x, self.y
         self.x += self.vector_x
         self.y += self.vector_y
@@ -58,12 +49,17 @@ class Body(Segment):
     """The Snake's body. Don't bite yourself."""
     def __init__(self, parent):
         super(Body, self).__init__()
+        global square_size
+        self.image = pygame.Surface((square_size, square_size))
+        self.image.fill(0)
+        self.image.set_colorkey(0)
+        pygame.draw.circle(self.image, (0, 200, 0), (16/2, 16/2), 16 / 2)
         self.parent = parent
         self.x, self.y = parent.old_x, parent.old_y
         self.rect.topleft = (self.x * square_size, self.y * square_size)
         self.color = (0, 127, 0)
 
-    def move(self):
+    def update(self):
         self.old_x, self.old_y = self.x, self.y
         self.x, self.y = self.parent.old_x, self.parent.old_y
         self.rect.topleft = (self.x * square_size, self.y * square_size)
@@ -75,20 +71,53 @@ class Snake(pygame.sprite.OrderedUpdates):
         super(Snake, self).__init__()
         self.head = Head()
         self.add(self.head)
+        self.body = [Body(self.head)]
+        self.add(self.body[0])
         self.timer = 0
+        self.food = Food()
+        self.add(self.food)
+
+    def update(self, time):
+        self.timer += time
+        global interval
+        if self.timer >= interval:
+            super(Snake, self).update()
+            self.timer -= interval
+            for b in self.body:
+                if b.x == self.head.x and b.y == self.head.y:
+                    self.quit("Yow!\nGame over, man.")
+            if self.food.x == self.head.x and self.food.y == self.head.y:
+                self.body.append(Body(self.body[-1]))
+                self.add(self.body[-1])
+                self.remove(self.food)
+                self.food = Food()
+                self.add(self.food)
+            if self.head.x < 0 or self.head.x > 29 or\
+               self.head.y < 0 or self.head.y > 29:
+                self.quit("Watch the walls!\nGame over, man.")
+
+    @staticmethod
+    def quit(message):
+        print(message)
+        print("FPS: %f" % ((sum(fps) / len(fps))))
+        pygame.quit()
+        sys.exit()
+
 
 class Food(pygame.sprite.Sprite):
     """Thing to eat. Yum."""
     def __init__(self):
+        super(Food, self).__init__()
         self.x = randint(0, spaces - 1)
         self.y = randint(0, spaces - 1)
         spawn_y = self.y * square_size
         spawn_x = self.x * square_size
         self.rect = pygame.Rect(spawn_x, spawn_y, square_size, square_size)
+        self.image = pygame.Surface((square_size, square_size))
+        self.image.fill(0)
+        self.image.set_colorkey(0)
+        pygame.draw.circle(self.image, (0, 0, 200), (16/2, 16/2), 16 / 2)
         self.color = (0, 0, 200)
-
-    def draw(self):
-        pygame.draw.circle(display, self.color, self.rect.center, square_size/2)
 
 
 pygame.init()
@@ -99,11 +128,10 @@ snake = Snake()
 
 while game:
     time_elapsed = clock.tick()
-    display.fill((0, 0, 0))
+    fps.append(clock.get_fps())
     for e in pygame.event.get():
         if e.type == QUIT:
-            pygame.quit()
-            sys.exit()
+            Snake.quit("You quit!")
         elif e.type == KEYDOWN:
             if snake.head.vector_x == 0:
                 if e.key == K_RIGHT or e.key == K_d:
@@ -119,6 +147,6 @@ while game:
                 elif e.key == K_DOWN or e.key == K_s:
                     snake.head.vector_y = 1
                     snake.head.vector_x = 0
-    snake.update()
-    snake.draw(display)
-    pygame.display.update()
+    snake.update(time_elapsed)
+    display.fill(0)
+    pygame.display.update(snake.draw(display))
