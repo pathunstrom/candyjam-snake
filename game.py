@@ -3,16 +3,17 @@ __author__ = 'Patrick'
 import pygame
 import sys
 from pygame.locals import *
-from random import randint
+from random import randint, choice
 
 interval = 150
 square_size = 16
 spaces = 30
 fps = []
-images = ["images/redsquare.png", "images/redcirlce.png",
-          "images/bluesquare.png", "images/bluecircle.png",
-          "images/greensquare.png", "images/greencircle.png",
-          "images/yellowsquare.png", "images/yellowcircle.png"]
+images = ["./images/redsquare.png", "./images/redcircle.png",
+          "./images/bluesquare.png", "./images/bluecircle.png",
+          "./images/greensquare.png", "./images/greencircle.png",
+          "./images/yellowsquare.png", "./images/yellowcircle.png"]
+
 
 class Segment(pygame.sprite.Sprite):
     """Parent class for Head and Body"""
@@ -47,13 +48,11 @@ class Head(Segment):
 
 class Body(Segment):
     """The Snake's body. Don't bite yourself."""
-    def __init__(self, parent):
+    def __init__(self, parent, art):
         super(Body, self).__init__()
         global square_size
-        self.image = pygame.Surface((square_size, square_size))
-        self.image.fill(0)
-        self.image.set_colorkey(0)
-        pygame.draw.circle(self.image, (0, 200, 0), (16/2, 16/2), 16 / 2)
+        self.image = art
+        self.image.set_colorkey((255, 0, 181))
         self.parent = parent
         self.x, self.y = parent.old_x, parent.old_y
         self.rect.topleft = (self.x * square_size, self.y * square_size)
@@ -71,8 +70,7 @@ class Snake(pygame.sprite.OrderedUpdates):
         super(Snake, self).__init__()
         self.head = Head()
         self.add(self.head)
-        self.body = [Body(self.head)]
-        self.add(self.body[0])
+        self.body = []
         self.timer = 0
         self.food = Food()
         self.add(self.food)
@@ -87,7 +85,10 @@ class Snake(pygame.sprite.OrderedUpdates):
                 if b.x == self.head.x and b.y == self.head.y:
                     self.quit("Yow!\nGame over, man.")
             if self.food.x == self.head.x and self.food.y == self.head.y:
-                self.body.append(Body(self.body[-1]))
+                try:
+                    self.body.append(Body(self.body[-1], self.food.image))
+                except IndexError:
+                    self.body.append(Body(self.head, self.food.image))
                 self.add(self.body[-1])
                 self.remove(self.food)
                 self.food = Food()
@@ -113,11 +114,8 @@ class Food(pygame.sprite.Sprite):
         spawn_y = self.y * square_size
         spawn_x = self.x * square_size
         self.rect = pygame.Rect(spawn_x, spawn_y, square_size, square_size)
-        self.image = pygame.Surface((square_size, square_size))
-        self.image.fill(0)
-        self.image.set_colorkey(0)
-        pygame.draw.circle(self.image, (0, 0, 200), (16/2, 16/2), 16 / 2)
-        self.color = (0, 0, 200)
+        self.image = pygame.image.load(choice(images)).convert()
+        self.image.set_colorkey((255, 0, 181))
 
 
 pygame.init()
