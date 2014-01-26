@@ -7,22 +7,28 @@ from random import randint, choice
 
 interval = 150
 square_size = 16
-spaces = 30
-fps = []
+half_square = square_size / 2
+square_center = (half_square, half_square)
+spaces = 20
 images = ["./images/redsquare.png", "./images/redcircle.png",
           "./images/bluesquare.png", "./images/bluecircle.png",
           "./images/greensquare.png", "./images/greencircle.png",
           "./images/yellowsquare.png", "./images/yellowcircle.png"]
+color_key = (255, 0, 181)
 
 
 class Segment(pygame.sprite.Sprite):
     """Parent class for Head and Body"""
     def __init__(self):
         super(Segment, self).__init__()
-        self.rect = pygame.Rect(0, 0, square_size, square_size)
-        self.old_x = -1
-        self.old_y = 0
-        self.color = (0, 0, 0)
+        self.old_x = None
+        self.old_y = None
+        self.child = None
+        self.parent = None
+
+    def is_colliding_with(self, other):
+
+        return (self.x, self.y) == (other.x, other.y)
 
 
 class Head(Segment):
@@ -30,20 +36,30 @@ class Head(Segment):
     def __init__(self):
         super(Head, self).__init__()
         global square_size
+        global half_square
         self.image = pygame.Surface((square_size, square_size))
         self.image.fill(0)
         self.image.set_colorkey(0)
-        pygame.draw.circle(self.image, (0, 255, 0), (16/2, 16/2), 16 / 2)
+        pygame.draw.circle(self.image, (0, 255, 0), square_center, half_square)
         self.x, self.y = 0, 0
         self.vector_x = 1
         self.vector_y = 0
-        self.color = (0, 255, 0)
 
     def update(self):
         self.old_x, self.old_y = self.x, self.y
         self.x += self.vector_x
         self.y += self.vector_y
         self.rect.topleft = (self.x * square_size, self.y * square_size)
+
+    def is_colliding_with_body(self):
+        if self.child:
+            return self._collision_helper(self.child)
+
+    def _collision_helper(self, child):
+        if child:
+            return child.is_colliding_with(self) or self._collision_helper(child.child)
+        else:
+            return False
 
 
 class Body(Segment):
@@ -52,8 +68,9 @@ class Body(Segment):
         super(Body, self).__init__()
         global square_size
         self.image = art
-        self.image.set_colorkey((255, 0, 181))
+        self.image.set_colorkey(color_key)
         self.parent = parent
+        self.parent.child = self
         self.x, self.y = parent.old_x, parent.old_y
         self.rect.topleft = (self.x * square_size, self.y * square_size)
         self.color = (0, 127, 0)
@@ -70,7 +87,6 @@ class Snake(pygame.sprite.OrderedUpdates):
         super(Snake, self).__init__()
         self.head = Head()
         self.add(self.head)
-        self.body = []
         self.timer = 0
         self.food = Food()
         self.add(self.food)
@@ -81,28 +97,28 @@ class Snake(pygame.sprite.OrderedUpdates):
         if self.timer >= interval:
             super(Snake, self).update()
             self.timer -= interval
-            for b in self.body:
-                if b.x == self.head.x and b.y == self.head.y:
+            if self.head.is_colliding_with_body():
                     self.quit("Yow!\nGame over, man.")
-            if self.food.x == self.head.x and self.food.y == self.head.y:
-                try:
-                    self.body.append(Body(self.body[-1], self.food.image))
-                except IndexError:
-                    self.body.append(Body(self.head, self.food.image))
-                self.add(self.body[-1])
+            if (self.food.x, self.food.y) == (self.head.x, self.head.y):
+                self.add(Body(self._find_tail(self.head), self.food.image))
                 self.remove(self.food)
                 self.food = Food()
                 self.add(self.food)
-            if self.head.x < 0 or self.head.x > 29 or\
-               self.head.y < 0 or self.head.y > 29:
+            if self.head.x < 0 or self.head.x > (spaces - 1) or\
+               self.head.y < 0 or self.head.y > (spaces - 1):
                 self.quit("Watch the walls!\nGame over, man.")
 
     @staticmethod
     def quit(message):
         print(message)
-        print("FPS: %f" % ((sum(fps) / len(fps))))
         pygame.quit()
         sys.exit()
+
+    def _find_tail(self, segment):
+        if segment.child:
+            return self._find_tail(segment.child)
+        else:
+            return segment
 
 
 class Food(pygame.sprite.Sprite):
@@ -115,18 +131,16 @@ class Food(pygame.sprite.Sprite):
         spawn_x = self.x * square_size
         self.rect = pygame.Rect(spawn_x, spawn_y, square_size, square_size)
         self.image = pygame.image.load(choice(images)).convert()
-        self.image.set_colorkey((255, 0, 181))
+        self.image.set_colorkey(color_key)
 
 
 pygame.init()
 display = pygame.display.set_mode((square_size * spaces, square_size * spaces))
 clock = pygame.time.Clock()
-game = True
 snake = Snake()
 
-while game:
+while True:
     time_elapsed = clock.tick()
-    fps.append(clock.get_fps())
     for e in pygame.event.get():
         if e.type == QUIT:
             Snake.quit("You quit!")
