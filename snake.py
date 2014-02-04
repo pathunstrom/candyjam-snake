@@ -121,7 +121,6 @@ class Food(pygame.sprite.Sprite):
             return segment.is_colliding_with(self)
 
 
-
 class Snake(pygame.sprite.OrderedUpdates):
     """The snake. Eat the food. Get Bigger. Don't die."""
     def __init__(self, lib):
