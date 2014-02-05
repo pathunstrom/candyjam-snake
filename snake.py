@@ -1,42 +1,55 @@
 __author__ = 'Patrick'
 
 import pygame
-import sys
 from random import randint, choice
 from pygame import transform
+from pygame.locals import *
 from config import *
 
 
-class Segment(pygame.sprite.Sprite):
+class Body(pygame.sprite.Sprite):
     """Parent class for Head and Body"""
-    def __init__(self):
-        super(Segment, self).__init__()
+    def __init__(self, x, y, dictionary):
+        super(Body, self).__init__()
         self.old_x = None
         self.old_y = None
+        self.x = x
+        self.y = y
         self.child = None
-        self.parent = None  # Remove
-        self.image = pygame.Surface(square)
+        self.image = dictionary["image"]
         self.rect = self.image.get_rect()
+        self.color = dictionary["color"]
+        self.type = dictionary["type"]
+        self.rect.topleft = (self.x * square_size, self.y * square_size)
 
     def is_colliding_with(self, other):
         return (self.x, self.y) == (other.x, other.y)
 
+    def move(self, x, y):
+        self.old_x, self.old_y = self.x, self.y
+        self._move_child()
+        self.x, self.y = x, y
+        self.rect.topleft = (self.x * square_size, self.y * square_size)
 
-class Head(Segment):
-    def __init__(self, head_image):
-        super(Head, self).__init__()
-        self.image = head_image
-        self.rect = self.image.get_rect()
-        self.x, self.y = 0, 0
+    def _move_child(self):
+        if self.child:
+            self.child.move(self.old_x, self.old_y)
+
+
+class Head(Body):
+    def __init__(self, head_dict):
+        super(Head, self).__init__(0, 0, head_dict)
         self.vector_x = 1
         self.vector_y = 0
         self.move_lock = False
 
     def update(self):
         self.old_x, self.old_y = self.x, self.y
+        self._move_child()
         self.x += self.vector_x
         self.y += self.vector_y
         self.rect.topleft = (self.x * square_size, self.y * square_size)
+
         if self.move_lock:
             self.lock_toggle()
 
@@ -53,27 +66,34 @@ class Head(Segment):
     def lock_toggle(self):
         self.move_lock = not self.move_lock
 
-    def rotate(self, rotation):
-        self.image = transform.rotate(self.image, rotation)
+    def rotate_left(self):
+        self.image = transform.rotate(self.image, 90)
 
+    def rotate_right(self):
+        self.image = transform.rotate(self.image, -90)
 
-class Body(Segment):
-    """The Snake's body. Don't bite yourself."""
-    def __init__(self, parent, dictionary):
-        super(Body, self).__init__()
-        self.image = dictionary['image']
-        self.type = dictionary['type']
-        self.color = dictionary['color']
-        self.rect = self.image.get_rect()
-        self.parent = parent
-        self.parent.child = self
-        self.x, self.y = parent.old_x, parent.old_y
-        self.rect.topleft = (self.x * square_size, self.y * square_size)
-
-    def update(self):
-        self.old_x, self.old_y = self.x, self.y
-        self.x, self.y = self.parent.old_x, self.parent.old_y
-        self.rect.topleft = (self.x * square_size, self.y * square_size)
+    def control(self, key):
+        if not self.move_lock:
+            if self.vector_x in (-1, 1):
+                if key in (K_w, K_UP):
+                    self.vector_y = -1
+                    self.rotate_left() if self.vector_x is 1 else self.rotate_right()
+                if key in (K_s, K_DOWN):
+                    self.vector_y = 1
+                    self.rotate_right() if self.vector_x is 1 else self.rotate_left()
+                if key in (K_w, K_s, K_UP, K_DOWN):
+                    self.vector_x = 0
+                    self.lock_toggle()
+            elif self.vector_y in (-1, 1):
+                if key in (K_d, K_RIGHT):
+                    self.vector_x = 1
+                    self.rotate_left() if self.vector_y is 1 else self.rotate_right()
+                if key in (K_a, K_LEFT):
+                    self.vector_x = -1
+                    self.rotate_right() if self.vector_y is 1 else self.rotate_left()
+                if key in (K_d, K_a, K_RIGHT, K_LEFT):
+                    self.vector_y = 0
+                    self.lock_toggle()
 
 
 class Food(pygame.sprite.Sprite):
@@ -133,19 +153,23 @@ class Snake(pygame.sprite.OrderedUpdates):
         self.add(self.food_basket[0])
         for x in range(6):
             self.update(interval)
-            self.add(Body(self._find_tail(self.head), choice(self.dictionary['candy'])))
+            tail = self._find_tail(self.head)
+            tail.child = Body(tail.old_x, tail.old_y, choice(self.dictionary["candy"]))
+            self.add(tail.child)
 
     def update(self, time):
         self.timer += time
         if self.timer >= interval:
             super(Snake, self).update()
             self.timer = 0
-            if self.head.is_colliding_with_body():
-                    self.quit("Yow!\nGame over, man.")
+            # if self.head.is_colliding_with_body():
+            #         self.quit("Yow!\nGame over, man.")
             for food in self.food_basket:
                 if self.head.is_colliding_with(food):
                     if food.edible:
-                        self.add(Body(self._find_tail(self.head), food.dict))
+                        tail = self._find_tail(self.head)
+                        tail.child = Body(tail.old_x, tail.old_y, food.dict)
+                        self.add(tail.child)
                         self.remove(food)
                         self.food_basket.remove(food)
                     else:
@@ -160,21 +184,11 @@ class Snake(pygame.sprite.OrderedUpdates):
                self.head.y < 0 or self.head.y > (spaces - 1):
                 self.quit("Watch the walls!\nGame over, man.")
 
-    @staticmethod
-    def quit(message):
-        # pygame.image.save(display, './gamescreenshot.png')
-        print(message)
-        pygame.quit()
-        sys.exit()
+    def quit(self, value):
+        pygame.event.post(pygame.event.Event(25, message = value))
 
     def _find_tail(self, segment):
         if segment.child:
             return self._find_tail(segment.child)
         else:
             return segment
-
-    def count_body(self, segment):
-        if segment.child:
-            return 1 + self.count_body(segment.child)
-        else:
-            return 1

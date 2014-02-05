@@ -16,3 +16,7 @@ purple = "purple"
 orange = "orange"
 green = "green"
 wild = "wild"
+
+# Defined for the event resolution.
+COLLIDE = 25
+
